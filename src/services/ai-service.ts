@@ -199,7 +199,7 @@ Generate the detailed response now:`
   /**
    * Parse the detailed tip response
    */
-  private parseTipDetailsResponse(text: string, originalTip: WellnessTip, profile: UserProfile): WellnessTip {
+  private parseTipDetailsResponse(text: string, originalTip: WellnessTip, _profile: UserProfile): WellnessTip {
     try {
       const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       const detailsData = JSON.parse(cleanText)

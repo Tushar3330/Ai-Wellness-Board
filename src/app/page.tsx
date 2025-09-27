@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useWellness, usePersistedState } from '@/store/wellness-context'
 import { ProfileSetup } from '@/components/profile-setup'
 import { WellnessBoard } from '@/components/wellness-board'

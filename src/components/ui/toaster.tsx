@@ -162,22 +162,8 @@ export function useToast() {
 
 // Toaster component
 export function Toaster() {
-  const { toasts } = useToast()
-
   return (
     <ToastProvider>
-      {toasts.map(({ id, ...props }) => (
-        <Toast key={id} {...props}>
-          <div className="grid gap-1">
-            {props.title && <ToastTitle>{props.title}</ToastTitle>}
-            {props.description && (
-              <ToastDescription>{props.description}</ToastDescription>
-            )}
-          </div>
-          {props.action}
-          <ToastClose />
-        </Toast>
-      ))}
       <ToastViewport />
     </ToastProvider>
   )
