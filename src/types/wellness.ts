@@ -51,6 +51,7 @@ export interface AppState {
   userProfile: UserProfile | null
   currentTips: WellnessTip[]
   favoriteTips: WellnessTip[]
+  selectedTip: WellnessTip | null
   isLoading: boolean
   error: string | null
   currentStep: AppStep

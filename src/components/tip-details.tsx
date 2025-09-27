@@ -21,22 +21,22 @@ import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/wellness'
 
 export function TipDetails() {
   const { state, actions } = useWellness()
-  const [selectedTip, setSelectedTip] = useState<WellnessTip | null>(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
 
+  const selectedTip = state.selectedTip
+
   useEffect(() => {
-    // In a real app, you'd get the tip ID from the URL or state
-    // For now, we'll use the first current tip as an example
-    if (state.currentTips.length > 0 && !selectedTip) {
-      loadTipDetails(state.currentTips[0])
+    // Load details when a tip is selected
+    if (selectedTip && !selectedTip.fullDescription) {
+      loadTipDetails(selectedTip)
     }
-  }, [state.currentTips, selectedTip])
+  }, [selectedTip])
 
   const loadTipDetails = async (tip: WellnessTip) => {
     if (!state.userProfile) return
 
-    setSelectedTip(tip)
+    actions.setSelectedTip(tip)
 
     // If we already have full description, don't reload
     if (tip.fullDescription && tip.steps) return
@@ -44,14 +44,16 @@ export function TipDetails() {
     setIsLoadingDetails(true)
 
     try {
+      console.log('🔍 Loading detailed information for:', tip.title)
       const result = await aiService.generateTipDetails(tip, state.userProfile)
       
       if (result.success && result.data) {
+        console.log('✅ Tip details loaded successfully')
         actions.updateTip(result.data)
-        setSelectedTip(result.data)
+        actions.setSelectedTip(result.data)
       }
     } catch (error) {
-      console.error('Error loading tip details:', error)
+      console.error('❌ Error loading tip details:', error)
     } finally {
       setIsLoadingDetails(false)
     }
@@ -328,7 +330,10 @@ export function TipDetails() {
                       key={tip.id}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => loadTipDetails(tip)}
+                      onClick={() => {
+                        console.log('🔄 Switching to tip:', tip.title)
+                        loadTipDetails(tip)
+                      }}
                       className="flex-shrink-0 w-64 p-4 border rounded-lg text-left hover:border-wellness-300 transition-colors"
                     >
                       <div className="flex items-start gap-3">

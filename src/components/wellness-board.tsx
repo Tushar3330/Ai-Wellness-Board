@@ -6,6 +6,8 @@ import { useWellness } from '@/store/wellness-context'
 import { aiService } from '@/services/ai-service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QuickActions } from '@/components/quick-actions'
+import { ResetMenu } from '@/components/reset-menu'
 import { WellnessTip } from '@/types/wellness'
 import { 
   Heart, 
@@ -26,6 +28,18 @@ export function WellnessBoard() {
       generateTips()
     }
   }, [state.currentStep, state.userProfile])
+
+  // Force regeneration when profile goals change
+  useEffect(() => {
+    if (state.userProfile && state.currentStep === 'tips-display' && state.currentTips.length > 0) {
+      const currentTipGoals = state.currentTips[0]?.aiGeneratedFor?.goals?.map(g => g.id).sort().join(',')
+      const newProfileGoals = state.userProfile.goals.map(g => g.id).sort().join(',')
+      
+      if (currentTipGoals !== newProfileGoals) {
+        actions.resetTips()
+      }
+    }
+  }, [state.userProfile?.goals, state.currentTips, state.currentStep])
 
   const generateTips = async () => {
     if (!state.userProfile) return
@@ -51,15 +65,30 @@ export function WellnessBoard() {
     }
   }
 
-  const regenerateTips = () => {
-    actions.setCurrentStep('tips-generation')
+  const regenerateTips = async () => {
     actions.setCurrentTips([])
-    generateTips()
+    actions.setError(null)
+    actions.setLoading(true)
+    
+    try {
+      await generateTips()
+    } catch (error) {
+      actions.setError('Failed to generate new tips. Please try again.')
+    }
   }
 
-  const handleTipClick = (tip: WellnessTip) => {
-    // Navigate to tip details (you'd implement this)
-    console.log('Navigate to tip details:', tip)
+  const handleTipClick = async (tip: WellnessTip) => {
+    actions.setLoading(true)
+    
+    try {
+      actions.setSelectedTip(tip)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      actions.setCurrentStep('tip-details')
+    } catch (error) {
+      actions.setError('Failed to load tip details')
+    } finally {
+      actions.setLoading(false)
+    }
   }
 
   if (state.isLoading) {
@@ -115,9 +144,14 @@ export function WellnessBoard() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center space-y-4"
       >
-        <div className="flex items-center justify-center gap-2 text-wellness-600">
+        <div className="flex items-center justify-center gap-2 text-wellness-600 relative">
           <Heart className="w-6 h-6" />
           <span className="text-lg font-medium">Your Personalized Wellness Board</span>
+          
+          {/* Reset Menu */}
+          <div className="absolute right-0 top-0">
+            <ResetMenu />
+          </div>
         </div>
         <h1 className="text-4xl font-bold text-gray-900">
           Ready to Transform Your Health?
@@ -134,8 +168,8 @@ export function WellnessBoard() {
             className="gap-2"
             disabled={state.isLoading}
           >
-            <RefreshCw className="w-4 h-4" />
-            Regenerate Tips
+            <RefreshCw className={`w-4 h-4 ${state.isLoading ? 'animate-spin' : ''}`} />
+            {state.isLoading ? 'Generating...' : 'Regenerate Tips'}
           </Button>
           <Button
             onClick={() => actions.setCurrentStep('favorites')}
@@ -144,6 +178,13 @@ export function WellnessBoard() {
           >
             <Star className="w-4 h-4" />
             View Favorites ({state.favoriteTips.length})
+          </Button>
+          <Button
+            onClick={() => actions.setCurrentStep('profile-setup')}
+            variant="ghost"
+            className="gap-2"
+          >
+            Edit Profile
           </Button>
         </div>
       </motion.div>
@@ -168,6 +209,9 @@ export function WellnessBoard() {
           ))}
         </motion.div>
       </AnimatePresence>
+
+      {/* Quick Actions */}
+      <QuickActions />
 
       {/* Profile Summary */}
       <motion.div
@@ -282,7 +326,10 @@ function TipCard({ tip, index, onToggleFavorite, onClick }: TipCardProps) {
           </div>
 
           <Button 
-            onClick={onClick}
+            onClick={async (e) => {
+              e.stopPropagation()
+              await onClick()
+            }}
             variant="outline" 
             size="sm" 
             className="w-full group-hover:bg-wellness-500 group-hover:text-white transition-colors"

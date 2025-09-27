@@ -6,16 +6,18 @@ import { useWellness } from '@/store/wellness-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ResetMenu } from '@/components/reset-menu'
 import { WELLNESS_GOALS, GENDER_OPTIONS } from '@/constants/wellness'
 import { UserProfile, WellnessGoal } from '@/types/wellness'
 import { Sparkles, ArrowRight, Check } from 'lucide-react'
 
 export function ProfileSetup() {
-  const { actions } = useWellness()
-  const [age, setAge] = useState<string>('')
-  const [gender, setGender] = useState<string>('')
-  const [selectedGoals, setSelectedGoals] = useState<WellnessGoal[]>([])
+  const { state, actions } = useWellness()
+  const [age, setAge] = useState<string>(state.userProfile?.age.toString() || '')
+  const [gender, setGender] = useState<string>(state.userProfile?.gender || '')
+  const [selectedGoals, setSelectedGoals] = useState<WellnessGoal[]>(state.userProfile?.goals || [])
   const [currentStep, setCurrentStep] = useState<'age' | 'gender' | 'goals'>('age')
+  const [, setIsEditMode] = useState<boolean>(!state.userProfile)
 
   const handleGoalToggle = (goal: WellnessGoal) => {
     setSelectedGoals(prev => {
@@ -35,12 +37,28 @@ export function ProfileSetup() {
       age: parseInt(age),
       gender: gender as UserProfile['gender'],
       goals: selectedGoals,
-      createdAt: new Date(),
+      createdAt: state.userProfile?.createdAt || new Date(),
       updatedAt: new Date()
     }
 
     actions.setUserProfile(profile)
-    actions.setCurrentStep('tips-generation')
+    
+    // If user already has tips, go back to board, otherwise generate new tips
+    if (state.currentTips.length > 0) {
+      actions.setCurrentStep('tips-display')
+    } else {
+      actions.setCurrentStep('tips-generation')
+    }
+    
+    setIsEditMode(false)
+  }
+
+  const handleBackToBoard = () => {
+    if (state.currentTips.length > 0) {
+      actions.setCurrentStep('tips-display')
+    } else if (state.userProfile) {
+      actions.setCurrentStep('tips-generation')
+    }
   }
 
   const canProceed = () => {
@@ -70,7 +88,13 @@ export function ProfileSetup() {
         className="w-full max-w-2xl"
       >
         <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm">
-          <CardHeader className="text-center pb-8">
+          <CardHeader className="text-center pb-8 relative">
+            {state.userProfile && (
+              <div className="absolute right-4 top-4">
+                <ResetMenu />
+              </div>
+            )}
+            
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -80,10 +104,12 @@ export function ProfileSetup() {
               <Sparkles className="w-10 h-10 text-white" />
             </motion.div>
             <CardTitle className="text-3xl font-bold text-gray-900">
-              Welcome to AI Wellness Board
+              {state.userProfile ? 'Update Your Profile' : 'Welcome to AI Wellness Board'}
             </CardTitle>
             <CardDescription className="text-lg text-gray-600">
-              Let's create your personalized wellness journey
+              {state.userProfile 
+                ? 'Modify your information to get updated recommendations'
+                : "Let's create your personalized wellness journey"}
             </CardDescription>
           </CardHeader>
 
@@ -212,6 +238,13 @@ export function ProfileSetup() {
                 >
                   Back
                 </Button>
+              ) : state.userProfile && state.currentTips.length > 0 ? (
+                <Button
+                  variant="outline"
+                  onClick={handleBackToBoard}
+                >
+                  Back to Board
+                </Button>
               ) : (
                 <div />
               )}
@@ -222,7 +255,9 @@ export function ProfileSetup() {
                 disabled={!canProceed()}
                 className="min-w-[120px]"
               >
-                {currentStep === 'goals' ? 'Generate Tips' : 'Next'}
+                {currentStep === 'goals' 
+                  ? (state.userProfile && state.currentTips.length > 0 ? 'Update Profile' : 'Generate Tips')
+                  : 'Next'}
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </div>

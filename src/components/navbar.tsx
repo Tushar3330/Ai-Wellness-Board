@@ -44,7 +44,13 @@ export function Navbar() {
           <motion.div
             whileHover={{ scale: 1.05 }}
             className="flex items-center gap-2 cursor-pointer"
-            onClick={() => actions.setCurrentStep('tips-display')}
+            onClick={() => {
+              if (state.userProfile) {
+                actions.setCurrentStep(state.currentTips.length > 0 ? 'tips-display' : 'tips-generation')
+              } else {
+                actions.setCurrentStep('profile-setup')
+              }
+            }}
           >
             <div className="w-8 h-8 rounded-full bg-wellness-gradient flex items-center justify-center">
               <Heart className="w-5 h-5 text-white" />

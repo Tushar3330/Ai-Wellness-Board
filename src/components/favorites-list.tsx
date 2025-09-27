@@ -19,6 +19,11 @@ export function FavoritesList() {
     actions.setCurrentStep(state.userProfile ? 'tips-display' : 'profile-setup')
   }
 
+  const handleTipClick = (tip: WellnessTip) => {
+    actions.setSelectedTip(tip)
+    actions.setCurrentStep('tip-details')
+  }
+
   if (state.favoriteTips.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -87,7 +92,10 @@ export function FavoritesList() {
               transition={{ delay: index * 0.1 }}
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
             >
-              <Card className="h-full group relative overflow-hidden card-hover">
+              <Card 
+                className="h-full group relative overflow-hidden card-hover cursor-pointer"
+                onClick={() => handleTipClick(tip)}
+              >
                 <div className="absolute inset-0 bg-gradient-to-br from-transparent to-wellness-50/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                 
                 <CardHeader className="relative">
@@ -96,7 +104,10 @@ export function FavoritesList() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleRemoveFavorite(tip)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveFavorite(tip)
+                      }}
                       className="shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />

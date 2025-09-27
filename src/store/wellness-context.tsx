@@ -9,6 +9,7 @@ const initialState: AppState = {
   userProfile: null,
   currentTips: [],
   favoriteTips: [],
+  selectedTip: null,
   isLoading: false,
   error: null,
   currentStep: 'profile-setup'
@@ -16,10 +17,11 @@ const initialState: AppState = {
 
 // Action types
 type WellnessAction =
-  | { type: 'SET_USER_PROFILE'; payload: UserProfile }
+  | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_CURRENT_TIPS'; payload: WellnessTip[] }
   | { type: 'ADD_FAVORITE_TIP'; payload: WellnessTip }
   | { type: 'REMOVE_FAVORITE_TIP'; payload: string }
+  | { type: 'SET_SELECTED_TIP'; payload: WellnessTip | null }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_CURRENT_STEP'; payload: AppStep }
@@ -77,6 +79,12 @@ function wellnessReducer(state: AppState, action: WellnessAction): AppState {
         isLoading: false
       }
     
+    case 'SET_SELECTED_TIP':
+      return {
+        ...state,
+        selectedTip: action.payload
+      }
+    
     case 'SET_CURRENT_STEP':
       return {
         ...state,
@@ -115,14 +123,17 @@ interface WellnessContextType {
   state: AppState
   dispatch: React.Dispatch<WellnessAction>
   actions: {
-    setUserProfile: (profile: UserProfile) => void
+    setUserProfile: (profile: UserProfile | null) => void
     setCurrentTips: (tips: WellnessTip[]) => void
     toggleFavoriteTip: (tip: WellnessTip) => void
+    setSelectedTip: (tip: WellnessTip | null) => void
     setLoading: (loading: boolean) => void
     setError: (error: string | null) => void
     setCurrentStep: (step: AppStep) => void
     updateTip: (tip: WellnessTip) => void
     resetState: () => void
+    resetProfile: () => void
+    resetTips: () => void
     loadPersistedState: () => void
     persistState: () => void
   }
@@ -165,9 +176,13 @@ export function WellnessProvider({ children }: WellnessProviderProps) {
 
   // Action creators
   const actions = {
-    setUserProfile: (profile: UserProfile) => {
+    setUserProfile: (profile: UserProfile | null) => {
       dispatch({ type: 'SET_USER_PROFILE', payload: profile })
-      saveToLocalStorage(APP_CONFIG.localStorageKeys.userProfile, profile)
+      if (profile) {
+        saveToLocalStorage(APP_CONFIG.localStorageKeys.userProfile, profile)
+      } else {
+        localStorage.removeItem(APP_CONFIG.localStorageKeys.userProfile)
+      }
     },
 
     setCurrentTips: (tips: WellnessTip[]) => {
@@ -195,6 +210,10 @@ export function WellnessProvider({ children }: WellnessProviderProps) {
       dispatch({ type: 'SET_ERROR', payload: error })
     },
 
+    setSelectedTip: (tip: WellnessTip | null) => {
+      dispatch({ type: 'SET_SELECTED_TIP', payload: tip })
+    },
+
     setCurrentStep: (step: AppStep) => {
       dispatch({ type: 'SET_CURRENT_STEP', payload: step })
     },
@@ -211,10 +230,45 @@ export function WellnessProvider({ children }: WellnessProviderProps) {
 
     resetState: () => {
       dispatch({ type: 'RESET_STATE' })
-      // Clear localStorage
+      
+      // Clear ALL localStorage data related to wellness app
       Object.values(APP_CONFIG.localStorageKeys).forEach(key => {
         localStorage.removeItem(key)
       })
+      
+      // Clear any other potential cached data
+      const allKeys = Object.keys(localStorage)
+      allKeys.forEach(key => {
+        if (key.includes('wellness') || key.includes('ai-wellness')) {
+          localStorage.removeItem(key)
+        }
+      })
+    },
+
+    resetProfile: () => {
+      dispatch({ type: 'SET_USER_PROFILE', payload: null })
+      dispatch({ type: 'SET_CURRENT_TIPS', payload: [] })
+      dispatch({ type: 'SET_SELECTED_TIP', payload: null })
+      dispatch({ type: 'SET_CURRENT_STEP', payload: 'profile-setup' })
+      dispatch({ type: 'SET_ERROR', payload: null })
+      
+      // Clear localStorage except favorites
+      localStorage.removeItem(APP_CONFIG.localStorageKeys.userProfile)
+      localStorage.removeItem(APP_CONFIG.localStorageKeys.appState)
+    },
+
+    resetTips: () => {
+      dispatch({ type: 'SET_CURRENT_TIPS', payload: [] })
+      dispatch({ type: 'SET_SELECTED_TIP', payload: null })
+      dispatch({ type: 'SET_ERROR', payload: null })
+      
+      // Clear any cached tip data
+      localStorage.removeItem(APP_CONFIG.localStorageKeys.appState)
+      
+      if (state.userProfile) {
+        // Force fresh generation
+        dispatch({ type: 'SET_CURRENT_STEP', payload: 'tips-generation' })
+      }
     },
 
     loadPersistedState: () => {

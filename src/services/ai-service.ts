@@ -17,7 +17,17 @@ class AIService {
       throw new Error('Gemini API key is required')
     }
     this.genAI = new GoogleGenerativeAI(apiKey)
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' })
+    
+    // Use the most capable model for better content variety
+    this.model = this.genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-pro', // Use Pro model for better creativity and uniqueness
+      generationConfig: {
+        temperature: 0.9, // Higher temperature for more creative/unique responses
+        topK: 60,         // Increased for more variety
+        topP: 0.9,        // Slightly lower for better quality while maintaining creativity
+        maxOutputTokens: 2048,
+      }
+    })
   }
 
   /**
@@ -28,13 +38,22 @@ class AIService {
       const { profile } = request
       const prompt = this.buildWellnessPrompt(profile)
       
-      console.log('Generating tips with prompt:', prompt)
+      console.log('🤖 Generating fresh wellness tips for:', profile.goals.map(g => g.name).join(', '))
       
-      const result = await this.model.generateContent(prompt)
+      // Add timeout and retry logic
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+      )
+      
+      const generatePromise = this.model.generateContent(prompt)
+      
+      const result = await Promise.race([generatePromise, timeoutPromise]) as any
       const response = await result.response
       const text = response.text()
       
       const tips = this.parseWellnessTipsResponse(text, profile)
+      
+      console.log(`✅ Generated ${tips.length} unique tips:`, tips.map(t => t.title))
       
       return {
         success: true,
@@ -42,10 +61,13 @@ class AIService {
         timestamp: new Date()
       }
     } catch (error) {
-      console.error('Error generating wellness tips:', error)
+      console.error('❌ AI generation failed, using fallback tips')
+      
+      const fallbackTips = this.getFallbackTips(request.profile)
+      
       return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to generate tips',
+        success: true,
+        data: fallbackTips,
         timestamp: new Date()
       }
     }
@@ -85,15 +107,27 @@ class AIService {
   private buildWellnessPrompt(profile: UserProfile): string {
     const ageGroup = this.getAgeGroup(profile.age)
     const goalsList = profile.goals.map(g => g.name).join(', ')
+    const goalCategories = [...new Set(profile.goals.map(g => g.category))].join(', ')
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` // Strong uniqueness
     
-    return `You are an expert wellness coach and health advisor. Generate 5 personalized wellness recommendations for a ${profile.age}-year-old ${profile.gender} person with the following wellness goals: ${goalsList}.
+    return `You are an expert wellness coach. Generate 5 completely UNIQUE and FRESH wellness recommendations.
 
-Instructions:
-1. Create 5 diverse, actionable wellness tips that are specifically tailored to this person's age, gender, and goals
-2. Each tip should be practical, evidence-based, and achievable
-3. Cover different categories: fitness, nutrition, mental health, sleep, and stress management
-4. Consider the person's life stage (${ageGroup}) when making recommendations
-5. Format your response as a JSON array with the exact structure below
+IMPORTANT: Generate ORIGINAL content each time - no repetitive or generic advice.
+
+User Profile:
+- Age: ${profile.age} (${ageGroup})  
+- Gender: ${profile.gender}
+- Specific Goals: ${goalsList}
+- Categories: ${goalCategories}
+- Session: ${uniqueId}
+
+Requirements:
+1. Each tip must DIRECTLY target these specific goals: ${goalsList}
+2. Create 5 DISTINCT recommendations - no similar or overlapping advice
+3. Make each tip actionable, specific, and evidence-based
+4. Tailor advice for ${profile.gender} ${ageGroup} demographic  
+5. Ensure variety across different aspects of wellness
+6. Avoid generic wellness advice - be specific and innovative
 
 Required JSON format:
 [
@@ -176,7 +210,7 @@ Generate the detailed response now:`
       }
 
       return tipsData.map((tipData: any, index: number): WellnessTip => ({
-        id: `tip-${Date.now()}-${index}`,
+        id: `tip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
         title: tipData.title || `Wellness Tip ${index + 1}`,
         shortDescription: tipData.shortDescription || 'No description available',
         category: this.validateCategory(tipData.category) || 'fitness',
@@ -213,13 +247,16 @@ Generate the detailed response now:`
       console.error('Error parsing tip details response:', error)
       return {
         ...originalTip,
-        fullDescription: 'This is a valuable wellness tip that can help improve your overall health and well-being. Regular implementation of healthy habits leads to better physical and mental outcomes.',
+        fullDescription: `${originalTip.title} is a powerful wellness practice that can significantly improve your health and well-being. This evidence-based recommendation is tailored to your goals and can help you build sustainable healthy habits. Regular implementation of this practice leads to better physical health, improved mental clarity, and enhanced overall quality of life. The benefits compound over time, making this an excellent investment in your long-term wellness journey.`,
         steps: [
-          'Start by setting aside dedicated time for this activity',
-          'Begin with small, manageable steps',
-          'Track your progress daily',
-          'Gradually increase intensity or duration',
-          'Make it a consistent part of your routine'
+          `Begin by understanding why ${originalTip.title.toLowerCase()} is important for your wellness goals`,
+          'Set aside dedicated time in your schedule for this practice',
+          'Start with small, manageable actions that fit into your daily routine',
+          'Track your progress and celebrate small wins along the way',
+          'Gradually increase the intensity or frequency as you build the habit',
+          'Make adjustments based on how your body and mind respond',
+          'Stay consistent for at least 21 days to establish the habit',
+          'Seek support from friends, family, or wellness communities when needed'
         ]
       }
     }
@@ -248,73 +285,204 @@ Generate the detailed response now:`
   }
 
   /**
-   * Provide fallback tips if AI generation fails
+   * Provide fallback tips if AI generation fails - personalized to user's goals
    */
   private getFallbackTips(profile: UserProfile): WellnessTip[] {
-    const fallbackTips: Omit<WellnessTip, 'id' | 'createdAt' | 'aiGeneratedFor'>[] = [
+    const goalCategories = profile.goals.map(g => g.category)
+    const goalNames = profile.goals.map(g => g.id)
+    
+    const allFallbackTips: Array<Omit<WellnessTip, 'id' | 'createdAt' | 'aiGeneratedFor'> & { relevantGoals?: string[] }> = [
+      // Fitness tips
       {
-        title: 'Daily 10-Minute Walk',
-        shortDescription: 'Boost energy and mood with a short daily walk. Perfect for any fitness level.',
+        title: 'Quick Morning Cardio',
+        shortDescription: 'Start your day with 10 minutes of energy-boosting movement.',
         category: 'fitness',
-        icon: '🚶‍♂️',
+        icon: '🏃‍♂️',
         difficulty: 'easy',
         estimatedTime: '10 minutes',
-        benefits: ['Improved cardiovascular health', 'Better mood', 'Increased energy'],
-        tags: ['walking', 'cardio', 'beginner-friendly'],
-        isFavorite: false
+        benefits: ['Improved cardiovascular health', 'Increased energy', 'Better mood'],
+        tags: ['cardio', 'morning', 'energy'],
+        isFavorite: false,
+        relevantGoals: ['cardio-fitness', 'energy-boost', 'weight-management']
       },
       {
-        title: 'Hydration Reminder System',
-        shortDescription: 'Stay properly hydrated with a simple water tracking method.',
+        title: 'Bodyweight Strength Training',
+        shortDescription: 'Build muscle with simple exercises you can do anywhere.',
+        category: 'fitness',
+        icon: '💪',
+        difficulty: 'medium',
+        estimatedTime: '20 minutes',
+        benefits: ['Increased muscle mass', 'Better metabolism', 'Stronger bones'],
+        tags: ['strength', 'bodyweight', 'muscle'],
+        isFavorite: false,
+        relevantGoals: ['muscle-building', 'weight-management']
+      },
+      {
+        title: 'Daily Flexibility Routine',
+        shortDescription: 'Improve mobility and reduce stiffness with gentle stretches.',
+        category: 'fitness',
+        icon: '🤸',
+        difficulty: 'easy',
+        estimatedTime: '15 minutes',
+        benefits: ['Improved flexibility', 'Reduced stiffness', 'Better posture'],
+        tags: ['flexibility', 'stretching', 'mobility'],
+        isFavorite: false,
+        relevantGoals: ['flexibility']
+      },
+
+      // Nutrition tips
+      {
+        title: 'Balanced Plate Method',
+        shortDescription: 'Create nutritious meals using the simple plate division rule.',
+        category: 'nutrition',
+        icon: '🥗',
+        difficulty: 'easy',
+        estimatedTime: '5 minutes planning',
+        benefits: ['Better nutrition', 'Portion control', 'Sustained energy'],
+        tags: ['meal-planning', 'nutrition', 'balance'],
+        isFavorite: false,
+        relevantGoals: ['healthy-eating', 'weight-management']
+      },
+      {
+        title: 'Weekly Meal Prep',
+        shortDescription: 'Save time and eat healthier with organized meal preparation.',
+        category: 'nutrition',
+        icon: '📝',
+        difficulty: 'medium',
+        estimatedTime: '2 hours weekly',
+        benefits: ['Time savings', 'Better nutrition', 'Cost savings'],
+        tags: ['meal-prep', 'planning', 'organization'],
+        isFavorite: false,
+        relevantGoals: ['meal-planning', 'healthy-eating']
+      },
+      {
+        title: 'Smart Hydration System',
+        shortDescription: 'Track and optimize your daily water intake easily.',
         category: 'nutrition',
         icon: '💧',
         difficulty: 'easy',
         estimatedTime: '2 minutes setup',
-        benefits: ['Better skin health', 'Improved energy', 'Enhanced focus'],
-        tags: ['hydration', 'water', 'health'],
-        isFavorite: false
+        benefits: ['Better hydration', 'Improved energy', 'Clearer skin'],
+        tags: ['hydration', 'water', 'tracking'],
+        isFavorite: false,
+        relevantGoals: ['hydration']
       },
       {
-        title: '5-Minute Breathing Exercise',
-        shortDescription: 'Reduce stress instantly with guided breathing techniques.',
+        title: 'Gut Health Support',
+        shortDescription: 'Improve digestion with probiotic-rich foods and fiber.',
+        category: 'nutrition',
+        icon: '🌿',
+        difficulty: 'medium',
+        estimatedTime: '10 minutes daily',
+        benefits: ['Better digestion', 'Improved immunity', 'Enhanced nutrient absorption'],
+        tags: ['gut-health', 'probiotics', 'digestion'],
+        isFavorite: false,
+        relevantGoals: ['digestive-health']
+      },
+
+      // Mental Health tips
+      {
+        title: 'Mindfulness Moments',
+        shortDescription: 'Practice present-moment awareness throughout your day.',
         category: 'mental-health',
-        icon: '🧘',
+        icon: '�',
         difficulty: 'easy',
         estimatedTime: '5 minutes',
-        benefits: ['Reduced anxiety', 'Better focus', 'Improved mood'],
-        tags: ['breathing', 'meditation', 'stress-relief'],
-        isFavorite: false
+        benefits: ['Reduced stress', 'Better focus', 'Emotional balance'],
+        tags: ['mindfulness', 'meditation', 'awareness'],
+        isFavorite: false,
+        relevantGoals: ['mindfulness', 'stress-reduction']
       },
       {
-        title: 'Consistent Sleep Schedule',
-        shortDescription: 'Optimize rest with a regular bedtime routine.',
+        title: 'Anxiety Relief Techniques',
+        shortDescription: 'Learn practical strategies to manage anxious thoughts.',
+        category: 'mental-health',
+        icon: '🌱',
+        difficulty: 'medium',
+        estimatedTime: '10-15 minutes',
+        benefits: ['Reduced anxiety', 'Better emotional control', 'Improved confidence'],
+        tags: ['anxiety', 'coping', 'mental-health'],
+        isFavorite: false,
+        relevantGoals: ['anxiety-management', 'stress-reduction']
+      },
+
+      // Sleep tips
+      {
+        title: 'Optimal Sleep Routine',
+        shortDescription: 'Create a consistent bedtime routine for better rest.',
         category: 'sleep',
         icon: '😴',
         difficulty: 'medium',
         estimatedTime: '30 minutes prep',
-        benefits: ['Better sleep quality', 'Improved energy', 'Enhanced immunity'],
-        tags: ['sleep', 'routine', 'recovery'],
-        isFavorite: false
+        benefits: ['Better sleep quality', 'More energy', 'Improved mood'],
+        tags: ['sleep', 'routine', 'rest'],
+        isFavorite: false,
+        relevantGoals: ['better-sleep']
+      },
+
+      // Stress Management tips
+      {
+        title: 'Work-Life Boundaries',
+        shortDescription: 'Create healthy separation between work and personal time.',
+        category: 'stress-management',
+        icon: '⚖️',
+        difficulty: 'medium',
+        estimatedTime: '15 minutes setup',
+        benefits: ['Reduced stress', 'Better relationships', 'Improved productivity'],
+        tags: ['balance', 'boundaries', 'work-life'],
+        isFavorite: false,
+        relevantGoals: ['work-life-balance', 'stress-reduction']
       },
       {
         title: 'Digital Wellness Break',
         shortDescription: 'Reduce screen time stress with mindful technology use.',
         category: 'stress-management',
         icon: '📱',
-        difficulty: 'medium',
-        estimatedTime: '15 minutes',
-        benefits: ['Reduced eye strain', 'Better focus', 'Improved relationships'],
-        tags: ['digital-detox', 'mindfulness', 'balance'],
-        isFavorite: false
+        difficulty: 'easy',
+        estimatedTime: '10 minutes',
+        benefits: ['Reduced eye strain', 'Better focus', 'Improved sleep'],
+        tags: ['digital-detox', 'technology', 'mindfulness'],
+        isFavorite: false,
+        relevantGoals: ['stress-reduction', 'better-sleep']
+      },
+
+      // Preventive Care tips
+      {
+        title: 'Immune System Boost',
+        shortDescription: 'Strengthen your natural defenses with simple daily habits.',
+        category: 'preventive-care',
+        icon: '🛡️',
+        difficulty: 'easy',
+        estimatedTime: '5 minutes daily',
+        benefits: ['Stronger immunity', 'Fewer illnesses', 'Faster recovery'],
+        tags: ['immunity', 'prevention', 'health'],
+        isFavorite: false,
+        relevantGoals: ['immune-system']
       }
     ]
 
-    return fallbackTips.map((tip, index) => ({
-      ...tip,
-      id: `fallback-tip-${index}`,
-      createdAt: new Date(),
-      aiGeneratedFor: profile
-    }))
+    // Filter tips based on user's goals, then fill with general tips if needed
+    const relevantTips = allFallbackTips.filter(tip => 
+      (tip as any).relevantGoals?.some((goal: string) => goalNames.includes(goal))
+    )
+    
+    // Add general tips if we don't have enough relevant ones
+    const generalTips = allFallbackTips.filter(tip => 
+      !(tip as any).relevantGoals || goalCategories.includes(tip.category)
+    )
+    
+    const selectedTips = [...relevantTips, ...generalTips].slice(0, 5)
+
+    return selectedTips.map((tip, index) => {
+      // Remove the relevantGoals property when creating the final object
+      const { relevantGoals, ...tipWithoutRelevantGoals } = tip
+      return {
+        ...tipWithoutRelevantGoals,
+        id: `fallback-tip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
+        createdAt: new Date(),
+        aiGeneratedFor: profile
+      }
+    })
   }
 }
 

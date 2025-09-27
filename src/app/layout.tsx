@@ -7,6 +7,7 @@ import { WellnessProvider } from '@/store/wellness-context'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://ai-wellness-board.vercel.app'),
   title: 'AI Wellness Board - Personalized Health Recommendations',
   description: 'Get personalized wellness recommendations powered by AI. Discover health tips tailored to your age, gender, and wellness goals.',
   keywords: ['wellness', 'health', 'AI', 'recommendations', 'personalized', 'fitness'],

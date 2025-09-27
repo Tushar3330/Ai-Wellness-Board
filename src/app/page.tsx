@@ -6,6 +6,8 @@ import { WellnessBoard } from '@/components/wellness-board'
 import { TipDetails } from '@/components/tip-details'
 import { FavoritesList } from '@/components/favorites-list'
 import { Navbar } from '@/components/navbar'
+import { Breadcrumb } from '@/components/breadcrumb'
+import { FloatingActionButton } from '@/components/floating-action-button'
 import { LoadingScreen } from '@/components/loading-screen'
 import { ErrorBoundary } from '@/components/error-boundary'
 
@@ -39,9 +41,11 @@ export default function HomePage() {
     <ErrorBoundary>
       <div className="min-h-screen bg-gradient-to-br from-wellness-50 via-white to-wellness-100">
         <Navbar />
+        <Breadcrumb />
         <main className="container mx-auto px-4 py-8">
           {renderCurrentStep()}
         </main>
+        <FloatingActionButton />
       </div>
     </ErrorBoundary>
   )
