@@ -66,9 +66,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} antialiased`}>
         <WellnessProvider>
-          <main className="min-h-screen bg-gradient-to-br from-wellness-50 via-white to-wellness-100">
-            {children}
-          </main>
+          {children}
           <Toaster />
         </WellnessProvider>
       </body>

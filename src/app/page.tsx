@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useWellness, usePersistedState } from '@/store/wellness-context'
 import { ProfileSetup } from '@/components/profile-setup'
 import { WellnessBoard } from '@/components/wellness-board'
@@ -13,9 +14,25 @@ import { ErrorBoundary } from '@/components/error-boundary'
 
 export default function HomePage() {
   const { state } = useWellness()
+  const [isHydrated, setIsHydrated] = useState(false)
   
   // Load persisted state on mount
   usePersistedState()
+
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-wellness-50 via-white to-wellness-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-wellness-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-wellness-700">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   const renderCurrentStep = () => {
     switch (state.currentStep) {

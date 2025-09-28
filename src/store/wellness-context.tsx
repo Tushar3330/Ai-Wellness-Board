@@ -336,6 +336,9 @@ export function usePersistedState() {
   const { actions } = useWellness()
   
   React.useEffect(() => {
-    actions.loadPersistedState()
+    // Only load persisted state on client-side
+    if (typeof window !== 'undefined') {
+      actions.loadPersistedState()
+    }
   }, [actions])
 }
